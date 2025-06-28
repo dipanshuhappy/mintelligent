@@ -90,7 +90,9 @@ export const AddressInput = ({ value, name, placeholder, onChange, disabled }: C
       prefix={
         ensName ? (
           <div className="flex bg-base-300 rounded-l-full items-center">
-            {isEnsAvatarLoading && <div className="skeleton bg-base-200 w-[35px] h-[35px] rounded-full shrink-0"></div>}
+            {isEnsAvatarLoading && (
+              <div className="skeleton bg-bamintelligent00 w-[35px] h-[35px] rounded-full shrink-0"></div>
+            )}
             {ensAvatar ? (
               <span className="w-[35px]">
                 {
@@ -104,8 +106,8 @@ export const AddressInput = ({ value, name, placeholder, onChange, disabled }: C
         ) : (
           (isEnsNameLoading || isEnsAddressLoading) && (
             <div className="flex bg-base-300 rounded-l-full items-center gap-2 pr-2">
-              <div className="skeleton bg-base-200 w-[35px] h-[35px] rounded-full shrink-0"></div>
-              <div className="skeleton bg-base-200 h-3 w-20"></div>
+              <div className="skeleton bg-bamintelligent00 w-[35px] h-[35px] rounded-full shrink-0"></div>
+              <div className="skeleton bg-bamintelligent00 h-3 w-20"></div>
             </div>
           )
         )
