@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import "./DeployHelpers.s.sol";
-import "../contracts/factory/MintIntelligenceNFTFactory.sol";
+import "../contracts/factory/MintIntelligentFactory.sol";
 
 /**
  * @notice Deploy script for YourContract contract
