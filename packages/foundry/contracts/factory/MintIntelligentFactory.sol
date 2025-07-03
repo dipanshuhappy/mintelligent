@@ -33,8 +33,7 @@ contract MintIntelligentFactory {
         address _royaltyReceiver,
         uint96 _royaltyFee
     ) 
-        public 
-        payable 
+        public  
         returns (address) 
     {
         require(_royaltyFee <= 10000, "Royalty fee too high"); // Max 100%

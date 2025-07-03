@@ -41,7 +41,7 @@ const deployedContracts = {
               internalType: "address",
             },
           ],
-          stateMutability: "payable",
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -265,7 +265,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1751352550.json",
+      deploymentFile: "run-1751537551.json",
       deploymentScript: "Deploy.s.sol",
     },
   },
@@ -305,7 +305,7 @@ const deployedContracts = {
               internalType: "address",
             },
           ],
-          stateMutability: "payable",
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -569,7 +569,7 @@ const deployedContracts = {
               internalType: "address",
             },
           ],
-          stateMutability: "payable",
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
