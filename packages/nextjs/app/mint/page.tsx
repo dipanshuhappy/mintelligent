@@ -1,0 +1,543 @@
+"use client";
+
+import React, { useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowLeft, ArrowRight, Check, ImageIcon, Sparkles, Upload, X } from "lucide-react";
+import { SubmitHandler, useForm } from "react-hook-form";
+import { z } from "zod/v4";
+
+// Confetti component
+const Confetti = ({ isActive }: { isActive: boolean }) => {
+  const confettiPieces = Array.from({ length: 50 }, (_, i) => i);
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-50">
+      {confettiPieces.map(piece => (
+        <motion.div
+          key={piece}
+          className="absolute w-2 h-2 bg-gradient-to-r from-pink-500 to-violet-500 rounded-full"
+          initial={{
+            x: Math.random() * window.innerWidth,
+            y: -10,
+            rotate: 0,
+            opacity: 0,
+          }}
+          animate={
+            isActive
+              ? {
+                  y: window.innerHeight + 10,
+                  rotate: 360,
+                  opacity: [0, 1, 1, 0],
+                }
+              : {}
+          }
+          transition={{
+            duration: 3,
+            delay: Math.random() * 2,
+            repeat: isActive ? Infinity : 0,
+            ease: "easeOut",
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+
+// Collection validation schema
+const collectionSchema = z.object({
+  name: z.string().min(1, "Collection name is required").max(50, "Name must be less than 50 characters"),
+  symbol: z.string().min(1, "Symbol is required").max(10, "Symbol must be less than 10 characters"),
+  royaltyReceiver: z.string().min(1, "Royalty receiver address is required").max(42, "Invalid address"),
+  royaltyFee: z.number().min(0, "Royalty fee must be at least 0%").max(50, "Royalty fee cannot exceed 50%"),
+});
+
+// NFT validation schema
+const nftSchema = z.object({
+  name: z.string().min(1, "NFT name is required").max(100, "Name must be less than 100 characters"),
+  description: z.string().min(1, "Description is required").max(1000, "Description must be less than 1000 characters"),
+  image: z.string().min(1, "Image is required"),
+});
+
+type CollectionFormData = z.infer<typeof collectionSchema>;
+type NFTFormData = z.infer<typeof nftSchema>;
+
+// Mock API functions
+const mockCreateCollection = async (data: CollectionFormData) => {
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  return {
+    id: Math.random().toString(36).substr(2, 9),
+    transactionHash: "0x" + Math.random().toString(16).substr(2, 64),
+    ...data,
+    royaltyFeeBasisPoints: data.royaltyFee * 100, // Convert percentage to basis points
+  };
+};
+
+const mockMintNFT = async (data: NFTFormData & { collectionId: string }) => {
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  return {
+    id: Math.random().toString(36).substr(2, 9),
+    transactionHash: "0x" + Math.random().toString(16).substr(2, 64),
+    ...data,
+  };
+};
+
+export default function MintNFTPage() {
+  const [currentStep, setCurrentStep] = useState(1);
+  const [collection, setCollection] = useState<any>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successType, setSuccessType] = useState<"collection" | "nft">("collection");
+  const [transactionHash, setTransactionHash] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  // Collection form
+  const collectionForm = useForm<CollectionFormData>({
+    resolver: zodResolver(collectionSchema),
+    defaultValues: {
+      name: "",
+      symbol: "",
+      royaltyReceiver: "",
+      royaltyFee: 5, // 5% default
+    },
+  });
+
+  // NFT form
+  const nftForm = useForm<NFTFormData>({
+    resolver: zodResolver(nftSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      image: "",
+    },
+  });
+
+  const createCollection = useMutation({
+    mutationFn: mockCreateCollection,
+    onSuccess: data => {
+      setCollection(data);
+      setTransactionHash(data.transactionHash);
+      setSuccessType("collection");
+      setShowSuccessModal(true);
+    },
+  });
+
+  const mintNFT = useMutation({
+    mutationFn: mockMintNFT,
+    onSuccess: data => {
+      setTransactionHash(data.transactionHash);
+      setSuccessType("nft");
+      setShowSuccessModal(true);
+      nftForm.reset();
+      setPreviewImage(null);
+    },
+  });
+
+  const onCollectionSubmit: SubmitHandler<CollectionFormData> = data => {
+    createCollection.mutate(data);
+  };
+
+  const onNFTSubmit: SubmitHandler<NFTFormData> = data => {
+    mintNFT.mutate({ ...data, collectionId: collection.id });
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const mockImageUrl = URL.createObjectURL(file);
+      setPreviewImage(mockImageUrl);
+      nftForm.setValue("image", mockImageUrl);
+    } catch (error) {
+      console.error("Error uploading image:", error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false);
+    if (successType === "collection") {
+      setCurrentStep(2);
+    }
+  };
+
+  const handleMintAnother = () => {
+    setShowSuccessModal(false);
+    // Form is already reset in the mutation success handler
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-6">
+      <div className="container mx-auto py-8">
+        <div className="max-w-2xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-4">
+              {currentStep === 1 ? "Create Collection" : "Mint NFT"}
+            </h1>
+            <p className="text-gray-300">
+              {currentStep === 1
+                ? "First, create your NFT collection with royalty settings"
+                : "Now mint individual NFTs to your collection"}
+            </p>
+          </div>
+
+          {/* Step Indicator */}
+          <div className="flex items-center justify-center mb-8">
+            <div className="flex items-center space-x-4">
+              <div
+                className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
+                  currentStep >= 1 ? "bg-purple-600 text-white" : "bg-gray-700 text-gray-400"
+                }`}
+              >
+                1
+              </div>
+              <div className={`w-12 h-0.5 ${currentStep >= 2 ? "bg-purple-600" : "bg-gray-700"}`}></div>
+              <div
+                className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
+                  currentStep >= 2 ? "bg-purple-600 text-white" : "bg-gray-700 text-gray-400"
+                }`}
+              >
+                2
+              </div>
+            </div>
+          </div>
+
+          <AnimatePresence mode="wait">
+            {currentStep === 1 ? (
+              <motion.div
+                key="step1"
+                initial={{ opacity: 0, x: 50 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -50 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Card className="bg-gray-800/50 border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Collection Details</CardTitle>
+                    <CardDescription className="text-gray-400">
+                      Set up your NFT collection with royalty settings
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={collectionForm.handleSubmit(onCollectionSubmit)} className="space-y-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="collectionName" className="text-gray-200">
+                          Collection Name
+                        </Label>
+                        <Input
+                          id="collectionName"
+                          placeholder="My Awesome Collection"
+                          {...collectionForm.register("name")}
+                          className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                        />
+                        {collectionForm.formState.errors.name && (
+                          <p className="text-sm text-red-400">{collectionForm.formState.errors.name.message}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="collectionSymbol" className="text-gray-200">
+                          Symbol
+                        </Label>
+                        <Input
+                          id="collectionSymbol"
+                          placeholder="AWESOME"
+                          {...collectionForm.register("symbol")}
+                          className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                        />
+                        {collectionForm.formState.errors.symbol && (
+                          <p className="text-sm text-red-400">{collectionForm.formState.errors.symbol.message}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="royaltyReceiver" className="text-gray-200">
+                          Royalty Receiver Address
+                        </Label>
+                        <Input
+                          id="royaltyReceiver"
+                          placeholder="0x..."
+                          {...collectionForm.register("royaltyReceiver")}
+                          className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                        />
+                        {collectionForm.formState.errors.royaltyReceiver && (
+                          <p className="text-sm text-red-400">
+                            {collectionForm.formState.errors.royaltyReceiver.message}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="royaltyFee" className="text-gray-200">
+                          Royalty Fee (%)
+                        </Label>
+                        <Input
+                          id="royaltyFee"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          placeholder="5"
+                          {...collectionForm.register("royaltyFee")}
+                          className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                        />
+                        <p className="text-xs text-gray-400">Enter percentage (e.g., 5 for 5%)</p>
+                        {collectionForm.formState.errors.royaltyFee && (
+                          <p className="text-sm text-red-400">{collectionForm.formState.errors.royaltyFee.message}</p>
+                        )}
+                      </div>
+
+                      <div className="pt-4">
+                        <Button
+                          type="submit"
+                          className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500"
+                          size="lg"
+                          disabled={createCollection.isPending}
+                        >
+                          {createCollection.isPending ? (
+                            <>
+                              <Sparkles className="mr-2 h-4 w-4 animate-pulse" />
+                              Creating Collection...
+                            </>
+                          ) : (
+                            <>
+                              Create Collection
+                              <ArrowRight className="ml-2 h-4 w-4" />
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="step2"
+                initial={{ opacity: 0, x: 50 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -50 }}
+                transition={{ duration: 0.3 }}
+              >
+                {/* Collection Info */}
+                {collection && (
+                  <Card className="bg-gray-800/50 border-gray-700 mb-6">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold text-white">{collection.name}</h3>
+                          <Badge variant="outline" className="mt-1 border-purple-500 text-purple-400">
+                            {collection.symbol}
+                          </Badge>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setCurrentStep(1)}
+                          className="text-gray-400 hover:text-white"
+                        >
+                          <ArrowLeft className="mr-2 h-4 w-4" />
+                          Edit Collection
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                <Card className="bg-gray-800/50 border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">NFT Details</CardTitle>
+                    <CardDescription className="text-gray-400">
+                      Create an individual NFT in your collection
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={nftForm.handleSubmit(onNFTSubmit)} className="space-y-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="image" className="text-gray-200">
+                          NFT Image
+                        </Label>
+                        <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed border-gray-600 rounded-lg">
+                          <div className="space-y-1 text-center">
+                            {previewImage ? (
+                              <div className="relative">
+                                <img
+                                  src={previewImage}
+                                  alt="Preview"
+                                  className="mx-auto h-48 w-48 object-cover rounded-md"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPreviewImage(null);
+                                    nftForm.setValue("image", "");
+                                  }}
+                                  className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex text-sm text-gray-400 justify-center">
+                                  <label
+                                    htmlFor="file-upload"
+                                    className="relative cursor-pointer bg-transparent rounded-md font-medium text-purple-400 hover:text-purple-300 focus-within:outline-none"
+                                  >
+                                    <div className="flex flex-col items-center justify-center space-y-2">
+                                      <Upload className="h-12 w-12 text-gray-400" />
+                                      <span>Upload a file</span>
+                                      <span className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</span>
+                                    </div>
+                                    <input
+                                      id="file-upload"
+                                      name="file-upload"
+                                      type="file"
+                                      className="sr-only"
+                                      onChange={handleImageUpload}
+                                      accept="image/*"
+                                      disabled={isUploading}
+                                    />
+                                  </label>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        {nftForm.formState.errors.image && (
+                          <p className="text-sm text-red-400">{nftForm.formState.errors.image.message}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="nftName" className="text-gray-200">
+                          NFT Name
+                        </Label>
+                        <Input
+                          id="nftName"
+                          placeholder="My Awesome NFT #1"
+                          {...nftForm.register("name")}
+                          className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                        />
+                        {nftForm.formState.errors.name && (
+                          <p className="text-sm text-red-400">{nftForm.formState.errors.name.message}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="description" className="text-gray-200">
+                          Description
+                        </Label>
+                        <Textarea
+                          id="description"
+                          placeholder="A brief description of your NFT"
+                          rows={3}
+                          {...nftForm.register("description")}
+                          className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                        />
+                        {nftForm.formState.errors.description && (
+                          <p className="text-sm text-red-400">{nftForm.formState.errors.description.message}</p>
+                        )}
+                      </div>
+
+                      <div className="pt-4">
+                        <Button
+                          type="submit"
+                          className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500"
+                          size="lg"
+                          disabled={mintNFT.isPending || isUploading}
+                        >
+                          {mintNFT.isPending ? (
+                            <>
+                              <Sparkles className="mr-2 h-4 w-4 animate-pulse" />
+                              Minting NFT...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="mr-2 h-4 w-4" />
+                              Mint NFT
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Success Modal */}
+        <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
+          <DialogContent className="sm:max-w-md bg-gray-800 border-gray-700">
+            <DialogHeader>
+              <DialogTitle className="text-center text-white">
+                <div className="flex justify-center mb-4">
+                  <div className="rounded-full bg-green-100 p-3">
+                    <Check className="h-6 w-6 text-green-600" />
+                  </div>
+                </div>
+                {successType === "collection" ? "Collection Created!" : "NFT Minted Successfully!"}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <p className="text-sm text-gray-300 text-center">
+                {successType === "collection"
+                  ? "Your collection has been created successfully. Now you can mint NFTs!"
+                  : "Your NFT has been minted and is now on the blockchain."}
+              </p>
+              <div className="bg-gray-700 p-3 rounded-md">
+                <p className="text-xs font-mono break-all text-gray-300">TX: {transactionHash}</p>
+              </div>
+              <div className="flex justify-center space-x-4 pt-2">
+                {successType === "collection" ? (
+                  <Button
+                    onClick={handleSuccessModalClose}
+                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500"
+                  >
+                    Continue to Mint NFTs
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={handleMintAnother}
+                      className="w-full border-gray-600 text-gray-300 hover:bg-gray-700"
+                    >
+                      Mint Another NFT
+                    </Button>
+                    <Button
+                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500"
+                      asChild
+                    >
+                      <a href="/me" className="no-underline">
+                        View My NFTs
+                      </a>
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Confetti isActive={showSuccessModal} />
+      </div>
+    </div>
+  );
+}
