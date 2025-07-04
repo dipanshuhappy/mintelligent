@@ -13,7 +13,10 @@ import { useMutation } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Check, ImageIcon, Sparkles, Upload, X } from "lucide-react";
 import { SubmitHandler, useForm } from "react-hook-form";
+import toast from "react-hot-toast";
+import { useWriteContract } from "wagmi";
 import { z } from "zod/v4";
+import { useScaffoldContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 
 // Confetti component
 const Confetti = ({ isActive }: { isActive: boolean }) => {
@@ -70,16 +73,16 @@ const nftSchema = z.object({
 type CollectionFormData = z.infer<typeof collectionSchema>;
 type NFTFormData = z.infer<typeof nftSchema>;
 
-// Mock API functions
-const mockCreateCollection = async (data: CollectionFormData) => {
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  return {
-    id: Math.random().toString(36).substr(2, 9),
-    transactionHash: "0x" + Math.random().toString(16).substr(2, 64),
-    ...data,
-    royaltyFeeBasisPoints: data.royaltyFee * 100, // Convert percentage to basis points
-  };
-};
+// // Mock API functions
+// const mockCreateCollection = async (data: CollectionFormData) => {
+//   await new Promise(resolve => setTimeout(resolve, 2000));
+//   return {
+//     id: Math.random().toString(36).substr(2, 9),
+//     transactionHash: "0x" + Math.random().toString(16).substr(2, 64),
+//     ...data,
+//     royaltyFeeBasisPoints: data.royaltyFee * 100, // Convert percentage to basis points
+//   };
+// };
 
 const mockMintNFT = async (data: NFTFormData & { collectionId: string }) => {
   await new Promise(resolve => setTimeout(resolve, 2000));
@@ -98,7 +101,9 @@ export default function MintNFTPage() {
   const [transactionHash, setTransactionHash] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-
+  const { writeContractAsync: writeMintIntelligentFactory } = useScaffoldWriteContract({
+    contractName: "MintIntelligentFactory",
+  });
   // Collection form
   const collectionForm = useForm<CollectionFormData>({
     resolver: zodResolver(collectionSchema),
@@ -121,12 +126,27 @@ export default function MintNFTPage() {
   });
 
   const createCollection = useMutation({
-    mutationFn: mockCreateCollection,
+    mutationFn: async (data: CollectionFormData) => {
+      const hash = await writeMintIntelligentFactory({
+        args: [data.name, data.symbol, data.royaltyReceiver, BigInt(data.royaltyFee * 100)],
+        functionName: "createNFTContract",
+      });
+      if (!hash) {
+        throw new Error("Failed to create collection");
+      }
+      return {
+        transactionHash: hash,
+        ...data,
+      };
+    },
     onSuccess: data => {
       setCollection(data);
       setTransactionHash(data.transactionHash);
-      setSuccessType("collection");
-      setShowSuccessModal(true);
+      // setSuccessType("collection");
+      // setShowSuccessModal(true);
+    },
+    onError: error => {
+      toast.error(error.message);
     },
   });
 
