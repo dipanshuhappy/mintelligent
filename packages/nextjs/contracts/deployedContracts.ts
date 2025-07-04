@@ -515,7 +515,7 @@ const deployedContracts = {
   },
   11155111: {
     MintIntelligentFactory: {
-      address: "0x52ee186a7d6e06f789018171914e525e5207797c",
+      address: "0x4cca27babd0f7212bb35e5c7a191b7c5c3b98731",
       abi: [
         {
           type: "function",
@@ -763,7 +763,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1751618752.json",
+      deploymentFile: "run-1751621832.json",
       deploymentScript: "Deploy.s.sol",
     },
   },
