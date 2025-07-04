@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { uploadNFTAction } from "@/app/(actions)/upload-file";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -800,7 +801,7 @@ export default function MintNFTPage() {
                 </div>
               )}
 
-              <div className="flex justify-center space-x-4 pt-2">
+              <div className="flex flex-col-reverse gap-3 justify-center space-x-4 pt-2">
                 <Button
                   variant="outline"
                   onClick={handleMintAnother}
@@ -812,9 +813,9 @@ export default function MintNFTPage() {
                   className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500"
                   asChild
                 >
-                  <a href="/me" className="no-underline">
+                  <Link href="/me" className="no-underline">
                     View My NFTs
-                  </a>
+                  </Link>
                 </Button>
               </div>
             </div>
