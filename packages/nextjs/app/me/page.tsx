@@ -5,40 +5,35 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
+import { erc721Abi } from "viem";
+import { useAccount } from "wagmi";
+import { multicall } from "wagmi/actions";
+import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { alchemy } from "~~/lib/alchemy";
+import { wagmiConfig } from "~~/services/web3/wagmiConfig";
 
-// Mock API function
-const mockFetchNFTs = async () => {
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  return [
-    {
-      id: "1",
-      name: "Cool Cat #1",
-      symbol: "COOL",
-      description: "A very cool cat NFT",
-      image: "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=400&h=400&fit=crop",
-      royaltyReceiver: "0x1234...7890",
-      royaltyFee: 500,
-    },
-    {
-      id: "2",
-      name: "Space Dog #1",
-      symbol: "SPACE",
-      description: "An astronaut dog exploring the cosmos",
-      image: "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=400&h=400&fit=crop",
-      royaltyReceiver: "0x0987...4321",
-      royaltyFee: 750,
-    },
-  ];
-};
+
 
 export default function MyNFTsPage() {
+  const {address} = useAccount()
+  const {data: nftsContracts} = useScaffoldReadContract({
+    contractName: "MintIntelligentFactory",
+    functionName: "getContractsByOwner",
+    args: [address],
+  })
   const {
     data: nfts,
     isLoading,
     error,
   } = useQuery({
     queryKey: ["nfts"],
-    queryFn: mockFetchNFTs,
+    queryFn: async ()=>{
+      if(!address){
+        return []
+      }
+      const nftsForOwner = await alchemy.nft.getNftsForOwner(address);
+      return nftsForOwner
+    },
   });
 
   if (isLoading) {

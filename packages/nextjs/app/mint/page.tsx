@@ -296,8 +296,8 @@ export default function MintNFTPage() {
       toast.success("Metadata uploaded to IPFS successfully!");
 
       // Use the metadata URL as tokenURI for minting
-      if (uploadResult.imageCid) {
-        await mintNFT.mutateAsync({ tokenURI: uploadResult.imageCid });
+      if (uploadResult.metadataUrl) {
+        await mintNFT.mutateAsync({ tokenURI: uploadResult.metadataUrl });
       } else {
         throw new Error("No metadata URL received from upload");
       }
