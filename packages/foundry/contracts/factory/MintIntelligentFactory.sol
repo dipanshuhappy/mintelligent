@@ -70,9 +70,7 @@ contract MintIntelligentFactory {
     function mintNFT(
         address _contractAddress,
         address _to,
-        string memory _uri,
-        address _royaltyReceiver,
-        uint96 _royaltyFee
+        string memory _uri
     )
         public
         returns (uint256)
@@ -81,7 +79,7 @@ contract MintIntelligentFactory {
         
         NFT nftContract = NFT(_contractAddress);
         
-        uint256 tokenId = nftContract.safeMint(_to, _uri, _royaltyReceiver, _royaltyFee);
+        uint256 tokenId = nftContract.safeMint(_to, _uri);
         
         emit NFTMinted(_contractAddress, _to, tokenId, _uri);
         

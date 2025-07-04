@@ -145,16 +145,6 @@ const deployedContracts = {
               type: "string",
               internalType: "string",
             },
-            {
-              name: "_royaltyReceiver",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "_royaltyFee",
-              type: "uint96",
-              internalType: "uint96",
-            },
           ],
           outputs: [
             {
@@ -409,16 +399,6 @@ const deployedContracts = {
               type: "string",
               internalType: "string",
             },
-            {
-              name: "_royaltyReceiver",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "_royaltyFee",
-              type: "uint96",
-              internalType: "uint96",
-            },
           ],
           outputs: [
             {
@@ -535,7 +515,7 @@ const deployedContracts = {
   },
   11155111: {
     MintIntelligentFactory: {
-      address: "0xc120be80052191b2d9e321e206b1496babe13487",
+      address: "0x52ee186a7d6e06f789018171914e525e5207797c",
       abi: [
         {
           type: "function",
@@ -673,16 +653,6 @@ const deployedContracts = {
               type: "string",
               internalType: "string",
             },
-            {
-              name: "_royaltyReceiver",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "_royaltyFee",
-              type: "uint96",
-              internalType: "uint96",
-            },
           ],
           outputs: [
             {
@@ -793,7 +763,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deploymentFile: "run-1751614119.json",
+      deploymentFile: "run-1751618752.json",
       deploymentScript: "Deploy.s.sol",
     },
   },

@@ -88,6 +88,7 @@ const mockMintNFT = async (data: { tokenURI: string; collectionAddress: string }
 };
 
 export default function MintNFTPage() {
+  
   const [currentStep, setCurrentStep] = useState(1);
   const [collection, setCollection] = useState<any>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);

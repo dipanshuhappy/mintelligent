@@ -16,14 +16,13 @@ contract  NFT is ERC721,ERC721Burnable,ERC721URIStorage,ERC721Royalty{
         _setDefaultRoyalty(_receiver, _feeNumerator);
 
     }
-    function safeMint(address to, string memory uri,address receiver, uint96 feeNumerator)
+    function safeMint(address to, string memory uri)
         public
         returns (uint256)
     {
         uint256 tokenId = _nextTokenId++;
         _safeMint(to, tokenId);
-        _setTokenURI(tokenId, uri);
-        _setTokenRoyalty(tokenId, receiver, feeNumerator);
+        _setTokenURI(tokenId, uri); 
         return tokenId;
     }
     function supportsInterface(bytes4 interfaceId)
