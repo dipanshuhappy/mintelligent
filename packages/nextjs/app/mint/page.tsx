@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { uploadNFTAction } from "@/app/(actions)/upload-file";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,18 +12,24 @@ import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, ImageIcon, Sparkles, Upload, X, Link as LinkIcon } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Copy, ImageIcon, Link as LinkIcon, Sparkles, Upload, X } from "lucide-react";
 import { SubmitHandler, useForm } from "react-hook-form";
 import toast from "react-hot-toast";
-import { useChainId, useWriteContract } from "wagmi";
+import { parseEventLogs } from "viem";
+import { waitForTransactionReceipt } from "viem/actions";
+import { useChainId, useClient, useWriteContract } from "wagmi";
+import { getAccount, getPublicClient, writeContract } from "wagmi/actions";
 import { z } from "zod/v4";
-import { useScaffoldContract, useScaffoldWriteContract, useSelectedNetwork, useTargetNetwork } from "~~/hooks/scaffold-eth";
-import { writeContract } from "wagmi/actions";
 import deployedContracts from "~~/contracts/deployedContracts";
+import {
+  useScaffoldContract,
+  useScaffoldWriteContract,
+  useSelectedNetwork,
+  useTargetNetwork,
+} from "~~/hooks/scaffold-eth";
 import { wagmiConfig } from "~~/services/web3/wagmiConfig";
-import { uploadNFTAction } from "@/app/(actions)/upload-file";
 
-// Confetti component (unchanged)
+// Confetti component
 const Confetti = ({ isActive }: { isActive: boolean }) => {
   const confettiPieces = Array.from({ length: 50 }, (_, i) => i);
 
@@ -33,7 +40,7 @@ const Confetti = ({ isActive }: { isActive: boolean }) => {
           key={piece}
           className="absolute w-2 h-2 bg-gradient-to-r from-pink-500 to-violet-500 rounded-full"
           initial={{
-            x: Math.random() * window.innerWidth,
+            x: Math.random() * (typeof window !== "undefined" ? window.innerWidth : 1000),
             y: -10,
             rotate: 0,
             opacity: 0,
@@ -41,7 +48,7 @@ const Confetti = ({ isActive }: { isActive: boolean }) => {
           animate={
             isActive
               ? {
-                  y: window.innerHeight + 10,
+                  y: (typeof window !== "undefined" ? window.innerHeight : 1000) + 10,
                   rotate: 360,
                   opacity: [0, 1, 1, 0],
                 }
@@ -59,7 +66,7 @@ const Confetti = ({ isActive }: { isActive: boolean }) => {
   );
 };
 
-// Collection validation schema (unchanged)
+// Collection validation schema
 const collectionSchema = z.object({
   name: z.string().min(1, "Collection name is required").max(50, "Name must be less than 50 characters"),
   symbol: z.string().min(1, "Symbol is required").max(10, "Symbol must be less than 10 characters"),
@@ -67,32 +74,23 @@ const collectionSchema = z.object({
   royaltyFee: z.number().min(0, "Royalty fee must be at least 0%").max(50, "Royalty fee cannot exceed 50%"),
 });
 
-// Updated NFT validation schema to include file validation
+// Updated NFT validation schema
 const nftSchema = z.object({
   name: z.string().min(1, "NFT name is required").max(100, "Name must be less than 100 characters"),
   description: z.string().min(1, "Description is required").max(1000, "Description must be less than 1000 characters"),
-  image: z.any().refine((file) => file instanceof File, "Image file is required"),
+  image: z.any().refine(file => file instanceof File, "Image file is required"),
 });
 
 type CollectionFormData = z.infer<typeof collectionSchema>;
 type NFTFormData = z.infer<typeof nftSchema>;
 
-// Mock function for actual NFT minting with contract
-const mockMintNFT = async (data: { tokenURI: string; collectionAddress: string }) => {
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  return {
-    id: Math.random().toString(36).substr(2, 9),
-    transactionHash: "0x" + Math.random().toString(16).substr(2, 64),
-    ...data,
-  };
-};
-
 export default function MintNFTPage() {
-  
   const [currentStep, setCurrentStep] = useState(1);
+  const [contractAddress, setContractAddress] = useState("");
   const [collection, setCollection] = useState<any>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [transactionHash, setTransactionHash] = useState("");
+  const [tokenId, setTokenId] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -104,10 +102,10 @@ export default function MintNFTPage() {
   } | null>(null);
 
   const { writeContractAsync: writeMintIntelligentFactory } = useScaffoldWriteContract({
-    contractName: "MintIntelligentFactory"
+    contractName: "MintIntelligentFactory",
   });
-  
-  // Collection form (unchanged)
+
+  // Collection form
   const collectionForm = useForm<CollectionFormData>({
     resolver: zodResolver(collectionSchema),
     defaultValues: {
@@ -132,24 +130,51 @@ export default function MintNFTPage() {
 
   const createCollection = useMutation({
     mutationFn: async (data: CollectionFormData) => {
-      console.log({data});
-      const abi = deployedContracts[targetNetwork.id as keyof typeof deployedContracts].MintIntelligentFactory.abi;
-      const address = deployedContracts[targetNetwork.id as keyof typeof deployedContracts].MintIntelligentFactory.address;
+      try {
+        console.log({ data });
+        const abi = deployedContracts[targetNetwork.id as keyof typeof deployedContracts].MintIntelligentFactory.abi;
+        const address =
+          deployedContracts[targetNetwork.id as keyof typeof deployedContracts].MintIntelligentFactory.address;
 
-      const hash = await writeContract(wagmiConfig, {
-        args: [data.name, data.symbol, data.royaltyReceiver, BigInt(data.royaltyFee * 100)],
-        functionName: "createNFTContract",
-        abi,
-        address
-      });
-      console.log({hash});
-      if (!hash) {
-        throw new Error("Failed to create collection");
+        const hash = await writeContract(wagmiConfig, {
+          args: [data.name, data.symbol, data.royaltyReceiver, BigInt(data.royaltyFee * 100)],
+          functionName: "createNFTContract",
+          abi,
+          address,
+        });
+
+        const client = getPublicClient(wagmiConfig);
+        if (!client) {
+          throw new Error("Failed to get public client");
+        }
+
+        const receipt = await waitForTransactionReceipt(client, {
+          hash,
+        });
+
+        const logs = parseEventLogs({
+          abi,
+          logs: receipt.logs,
+          eventName: "NFTContractCreated",
+        });
+
+        if (logs.length === 0) {
+          throw new Error("No NFTContractCreated event found in transaction");
+        }
+
+        const contractAddress = logs[0].args.contractAddress;
+        setContractAddress(contractAddress);
+        console.log({ hash, contractAddress });
+
+        return {
+          transactionHash: hash,
+          contractAddress,
+          ...data,
+        };
+      } catch (error) {
+        console.error("Collection creation error:", error);
+        throw error;
       }
-      return {
-        transactionHash: hash,
-        ...data,
-      };
     },
     onSuccess: data => {
       setCollection(data);
@@ -158,28 +183,78 @@ export default function MintNFTPage() {
       setCurrentStep(2);
     },
     onError: error => {
-      toast.error(error.message);
+      console.error("Collection creation failed:", error);
+      toast.error(error?.message || "Failed to create collection");
     },
   });
 
   const mintNFT = useMutation({
     mutationFn: async (data: { tokenURI: string }) => {
-      // Here you would integrate with your actual smart contract minting function
-      return await mockMintNFT({ 
-        tokenURI: data.tokenURI, 
-        collectionAddress: collection.address || "0x..." 
-      });
+      try {
+        const abi = deployedContracts[targetNetwork.id as keyof typeof deployedContracts].MintIntelligentFactory.abi;
+        const address =
+          deployedContracts[targetNetwork.id as keyof typeof deployedContracts].MintIntelligentFactory.address;
+        const account = getAccount(wagmiConfig);
+
+        if (!account.address) {
+          throw new Error("Please connect your wallet");
+        }
+
+        if (!contractAddress) {
+          throw new Error("No collection contract address found");
+        }
+
+        const hash = await writeContract(wagmiConfig, {
+          args: [contractAddress, account.address, data.tokenURI],
+          functionName: "mintNFT",
+          abi,
+          address,
+        });
+
+        const client = getPublicClient(wagmiConfig);
+        if (!client) {
+          throw new Error("Failed to get public client");
+        }
+
+        const receipt = await waitForTransactionReceipt(client, {
+          hash,
+        });
+
+        const logs = parseEventLogs({
+          abi,
+          logs: receipt.logs,
+          eventName: "NFTMinted",
+        });
+
+        if (logs.length === 0) {
+          throw new Error("No NFTMinted event found in transaction");
+        }
+
+        const tokenId = logs[0].args.tokenId;
+        console.log({ hash, tokenId });
+
+        return {
+          transactionHash: hash,
+          tokenId: tokenId.toString(),
+          ...data,
+        };
+      } catch (error) {
+        console.error("NFT minting error:", error);
+        throw error;
+      }
     },
     onSuccess: data => {
       setTransactionHash(data.transactionHash);
+      setTokenId(data.tokenId);
       setShowSuccessModal(true);
       nftForm.reset();
       setPreviewImage(null);
       setSelectedFile(null);
-      setUploadedMetadata(null);
+      // Don't reset uploadedMetadata here so it shows in modal
     },
     onError: error => {
-      toast.error(error.message);
+      console.error("NFT minting failed:", error);
+      toast.error(error?.message || "Failed to mint NFT");
     },
   });
 
@@ -187,7 +262,7 @@ export default function MintNFTPage() {
     createCollection.mutate(data);
   };
 
-  const onNFTSubmit: SubmitHandler<NFTFormData> = async (data) => {
+  const onNFTSubmit: SubmitHandler<NFTFormData> = async data => {
     if (!selectedFile) {
       toast.error("Please select an image file");
       return;
@@ -198,15 +273,15 @@ export default function MintNFTPage() {
     try {
       // Create FormData for server action
       const formData = new FormData();
-      formData.append('image', selectedFile);
-      formData.append('name', data.name);
-      formData.append('description', data.description);
+      formData.append("image", selectedFile);
+      formData.append("name", data.name);
+      formData.append("description", data.description);
 
       // Upload to Filebase/IPFS
       const uploadResult = await uploadNFTAction(formData);
 
       if (!uploadResult.success) {
-        throw new Error(uploadResult.error || 'Upload failed');
+        throw new Error(uploadResult.error || "Upload failed");
       }
 
       // Store the metadata CIDs for display
@@ -217,15 +292,17 @@ export default function MintNFTPage() {
         metadataUrl: uploadResult.metadataUrl,
       });
 
-      toast.success('Metadata uploaded to IPFS successfully!');
+      toast.success("Metadata uploaded to IPFS successfully!");
 
       // Use the metadata URL as tokenURI for minting
-      if (uploadResult.metadataUrl) {
-        mintNFT.mutate({ tokenURI: uploadResult.metadataUrl });
+      if (uploadResult.imageCid) {
+        await mintNFT.mutateAsync({ tokenURI: uploadResult.imageCid });
+      } else {
+        throw new Error("No metadata URL received from upload");
       }
     } catch (error) {
-      console.error('Upload error:', error);
-      toast.error(error instanceof Error ? error.message : 'Upload failed');
+      console.error("Upload error:", error);
+      toast.error(error instanceof Error ? error.message : "Upload failed");
     } finally {
       setIsUploading(false);
     }
@@ -236,14 +313,14 @@ export default function MintNFTPage() {
     if (!file) return;
 
     // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select a valid image file');
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image file");
       return;
     }
 
     // Validate file size (10MB limit)
     if (file.size > 10 * 1024 * 1024) {
-      toast.error('File size must be less than 10MB');
+      toast.error("File size must be less than 10MB");
       return;
     }
 
@@ -252,7 +329,7 @@ export default function MintNFTPage() {
       const previewUrl = URL.createObjectURL(file);
       setPreviewImage(previewUrl);
       setSelectedFile(file);
-      
+
       // Update form value
       nftForm.setValue("image", file);
       nftForm.clearErrors("image");
@@ -264,6 +341,17 @@ export default function MintNFTPage() {
 
   const handleMintAnother = () => {
     setShowSuccessModal(false);
+    setUploadedMetadata(null);
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Copied to clipboard!");
+  };
+
+  const formatTxHash = (hash: string) => {
+    if (hash.length <= 20) return hash;
+    return `${hash.slice(0, 10)}...${hash.slice(-10)}`;
   };
 
   return (
@@ -312,7 +400,7 @@ export default function MintNFTPage() {
                 exit={{ opacity: 0, x: -50 }}
                 transition={{ duration: 0.3 }}
               >
-                {/* Collection form remains the same */}
+                {/* Collection form */}
                 <Card className="bg-gray-800/50 border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">Collection Details</CardTitle>
@@ -431,6 +519,17 @@ export default function MintNFTPage() {
                           <Badge variant="outline" className="mt-1 border-purple-500 text-purple-400">
                             {collection.symbol}
                           </Badge>
+                          {contractAddress && (
+                            <p className="text-xs text-gray-400 mt-1">
+                              Contract: {formatTxHash(contractAddress)}
+                              <button
+                                onClick={() => copyToClipboard(contractAddress)}
+                                className="ml-2 text-purple-400 hover:text-purple-300"
+                              >
+                                <Copy className="h-3 w-3 inline" />
+                              </button>
+                            </p>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -499,7 +598,11 @@ export default function MintNFTPage() {
                           </div>
                         </div>
                         {nftForm.formState.errors.image && (
-                          <p className="text-sm text-red-400">{nftForm.formState.errors.image.message?.toString()}</p>
+                          <p className="text-sm text-red-400">
+                            {typeof nftForm.formState.errors.image.message === "string"
+                              ? nftForm.formState.errors.image.message
+                              : "Image is required"}
+                          </p>
                         )}
                       </div>
 
@@ -628,10 +731,19 @@ export default function MintNFTPage() {
               <p className="text-sm text-gray-300 text-center">
                 Your NFT has been minted and is now on the blockchain with IPFS metadata.
               </p>
-              
+
               {/* Transaction Hash */}
               <div className="bg-gray-700 p-3 rounded-md">
-                <p className="text-xs font-mono break-all text-gray-300">TX: {transactionHash}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-mono break-all text-gray-300">TX: {formatTxHash(transactionHash)}</p>
+                  <button
+                    onClick={() => copyToClipboard(transactionHash)}
+                    className="text-purple-400 hover:text-purple-300 ml-2"
+                  >
+                    <Copy className="h-3 w-3" />
+                  </button>
+                </div>
+                {tokenId && <p className="text-xs text-gray-300 mt-2">Token ID: {tokenId}</p>}
               </div>
 
               {/* IPFS Information */}
@@ -639,15 +751,51 @@ export default function MintNFTPage() {
                 <div className="bg-gray-700 p-3 rounded-md space-y-2">
                   <div>
                     <p className="text-xs text-gray-400">Image IPFS:</p>
-                    <p className="text-xs font-mono break-all text-green-400">
-                      {uploadedMetadata.imageCid}
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-mono break-all text-green-400 mr-2">{uploadedMetadata.imageCid}</p>
+                      <div className="flex space-x-1">
+                        <button
+                          onClick={() => copyToClipboard(uploadedMetadata.imageCid || "")}
+                          className="text-purple-400 hover:text-purple-300"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </button>
+                        {uploadedMetadata.imageUrl && (
+                          <a
+                            href={uploadedMetadata.imageUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-purple-400 hover:text-purple-300"
+                          >
+                            <LinkIcon className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <div>
                     <p className="text-xs text-gray-400">Metadata IPFS:</p>
-                    <p className="text-xs font-mono break-all text-green-400">
-                      {uploadedMetadata.metadataCid}
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-mono break-all text-green-400 mr-2">{uploadedMetadata.metadataCid}</p>
+                      <div className="flex space-x-1">
+                        <button
+                          onClick={() => copyToClipboard(uploadedMetadata.metadataCid || "")}
+                          className="text-purple-400 hover:text-purple-300"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </button>
+                        {uploadedMetadata.metadataUrl && (
+                          <a
+                            href={uploadedMetadata.metadataUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-purple-400 hover:text-purple-300"
+                          >
+                            <LinkIcon className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
