@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, ImageIcon, Sparkles, Upload, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ImageIcon, Sparkles, Upload, X, Link as LinkIcon } from "lucide-react";
 import { SubmitHandler, useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import { useChainId, useWriteContract } from "wagmi";
@@ -20,8 +20,9 @@ import { useScaffoldContract, useScaffoldWriteContract, useSelectedNetwork, useT
 import { writeContract } from "wagmi/actions";
 import deployedContracts from "~~/contracts/deployedContracts";
 import { wagmiConfig } from "~~/services/web3/wagmiConfig";
+import { uploadNFTAction } from "@/app/(actions)/upload-file";
 
-// Confetti component
+// Confetti component (unchanged)
 const Confetti = ({ isActive }: { isActive: boolean }) => {
   const confettiPieces = Array.from({ length: 50 }, (_, i) => i);
 
@@ -58,7 +59,7 @@ const Confetti = ({ isActive }: { isActive: boolean }) => {
   );
 };
 
-// Collection validation schema
+// Collection validation schema (unchanged)
 const collectionSchema = z.object({
   name: z.string().min(1, "Collection name is required").max(50, "Name must be less than 50 characters"),
   symbol: z.string().min(1, "Symbol is required").max(10, "Symbol must be less than 10 characters"),
@@ -66,17 +67,18 @@ const collectionSchema = z.object({
   royaltyFee: z.number().min(0, "Royalty fee must be at least 0%").max(50, "Royalty fee cannot exceed 50%"),
 });
 
-// NFT validation schema
+// Updated NFT validation schema to include file validation
 const nftSchema = z.object({
   name: z.string().min(1, "NFT name is required").max(100, "Name must be less than 100 characters"),
   description: z.string().min(1, "Description is required").max(1000, "Description must be less than 1000 characters"),
-  image: z.string().min(1, "Image is required"),
+  image: z.any().refine((file) => file instanceof File, "Image file is required"),
 });
 
 type CollectionFormData = z.infer<typeof collectionSchema>;
 type NFTFormData = z.infer<typeof nftSchema>;
 
-const mockMintNFT = async (data: NFTFormData & { collectionId: string }) => {
+// Mock function for actual NFT minting with contract
+const mockMintNFT = async (data: { tokenURI: string; collectionAddress: string }) => {
   await new Promise(resolve => setTimeout(resolve, 2000));
   return {
     id: Math.random().toString(36).substr(2, 9),
@@ -92,50 +94,58 @@ export default function MintNFTPage() {
   const [transactionHash, setTransactionHash] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadedMetadata, setUploadedMetadata] = useState<{
+    imageCid?: string;
+    metadataCid?: string;
+    imageUrl?: string;
+    metadataUrl?: string;
+  } | null>(null);
+
   const { writeContractAsync: writeMintIntelligentFactory } = useScaffoldWriteContract({
     contractName: "MintIntelligentFactory"
   });
   
-  // Collection form
+  // Collection form (unchanged)
   const collectionForm = useForm<CollectionFormData>({
     resolver: zodResolver(collectionSchema),
     defaultValues: {
       name: "",
       symbol: "",
       royaltyReceiver: "",
-      royaltyFee: 5, // 5% default
+      royaltyFee: 5,
     },
   });
 
-  // NFT form
+  // NFT form with file handling
   const nftForm = useForm<NFTFormData>({
     resolver: zodResolver(nftSchema),
     defaultValues: {
       name: "",
       description: "",
-      image: "",
+      image: undefined,
     },
-  })
-  const {targetNetwork} = useTargetNetwork()
+  });
+
+  const { targetNetwork } = useTargetNetwork();
 
   const createCollection = useMutation({
     mutationFn: async (data: CollectionFormData) => {
-      console.log({data})
-      const abi = deployedContracts[targetNetwork.id as keyof typeof deployedContracts].MintIntelligentFactory.abi
-      const address = deployedContracts[targetNetwork.id as keyof typeof deployedContracts].MintIntelligentFactory.address
+      console.log({data});
+      const abi = deployedContracts[targetNetwork.id as keyof typeof deployedContracts].MintIntelligentFactory.abi;
+      const address = deployedContracts[targetNetwork.id as keyof typeof deployedContracts].MintIntelligentFactory.address;
 
-      const hash = await writeContract(wagmiConfig,{
+      const hash = await writeContract(wagmiConfig, {
         args: [data.name, data.symbol, data.royaltyReceiver, BigInt(data.royaltyFee * 100)],
         functionName: "createNFTContract",
         abi,
         address
       });
-      console.log({hash})
+      console.log({hash});
       if (!hash) {
         throw new Error("Failed to create collection");
       }
       return {
-
         transactionHash: hash,
         ...data,
       };
@@ -143,9 +153,7 @@ export default function MintNFTPage() {
     onSuccess: data => {
       setCollection(data);
       setTransactionHash(data.transactionHash);
-      // Show success toast instead of modal
       toast.success("Collection created successfully! Now you can mint NFTs.");
-      // Automatically proceed to step 2
       setCurrentStep(2);
     },
     onError: error => {
@@ -154,12 +162,23 @@ export default function MintNFTPage() {
   });
 
   const mintNFT = useMutation({
-    mutationFn: mockMintNFT,
+    mutationFn: async (data: { tokenURI: string }) => {
+      // Here you would integrate with your actual smart contract minting function
+      return await mockMintNFT({ 
+        tokenURI: data.tokenURI, 
+        collectionAddress: collection.address || "0x..." 
+      });
+    },
     onSuccess: data => {
       setTransactionHash(data.transactionHash);
       setShowSuccessModal(true);
       nftForm.reset();
       setPreviewImage(null);
+      setSelectedFile(null);
+      setUploadedMetadata(null);
+    },
+    onError: error => {
+      toast.error(error.message);
     },
   });
 
@@ -167,31 +186,83 @@ export default function MintNFTPage() {
     createCollection.mutate(data);
   };
 
-  const onNFTSubmit: SubmitHandler<NFTFormData> = data => {
-    mintNFT.mutate({ ...data, collectionId: collection.id });
+  const onNFTSubmit: SubmitHandler<NFTFormData> = async (data) => {
+    if (!selectedFile) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      // Create FormData for server action
+      const formData = new FormData();
+      formData.append('image', selectedFile);
+      formData.append('name', data.name);
+      formData.append('description', data.description);
+
+      // Upload to Filebase/IPFS
+      const uploadResult = await uploadNFTAction(formData);
+
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || 'Upload failed');
+      }
+
+      // Store the metadata CIDs for display
+      setUploadedMetadata({
+        imageCid: uploadResult.imageCid,
+        metadataCid: uploadResult.metadataCid,
+        imageUrl: uploadResult.imageUrl,
+        metadataUrl: uploadResult.metadataUrl,
+      });
+
+      toast.success('Metadata uploaded to IPFS successfully!');
+
+      // Use the metadata URL as tokenURI for minting
+      if (uploadResult.metadataUrl) {
+        mintNFT.mutate({ tokenURI: uploadResult.metadataUrl });
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error(error instanceof Error ? error.message : 'Upload failed');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsUploading(true);
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select a valid image file');
+      return;
+    }
+
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size must be less than 10MB');
+      return;
+    }
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const mockImageUrl = URL.createObjectURL(file);
-      setPreviewImage(mockImageUrl);
-      nftForm.setValue("image", mockImageUrl);
+      // Create preview
+      const previewUrl = URL.createObjectURL(file);
+      setPreviewImage(previewUrl);
+      setSelectedFile(file);
+      
+      // Update form value
+      nftForm.setValue("image", file);
+      nftForm.clearErrors("image");
     } catch (error) {
-      console.error("Error uploading image:", error);
-    } finally {
-      setIsUploading(false);
+      console.error("Error handling image:", error);
+      toast.error("Error processing image file");
     }
   };
 
   const handleMintAnother = () => {
     setShowSuccessModal(false);
-    // Form is already reset in the mutation success handler
   };
 
   return (
@@ -206,7 +277,7 @@ export default function MintNFTPage() {
             <p className="text-gray-300">
               {currentStep === 1
                 ? "First, create your NFT collection with royalty settings"
-                : "Now mint individual NFTs to your collection"}
+                : "Now mint individual NFTs to your collection with IPFS storage"}
             </p>
           </div>
 
@@ -240,6 +311,7 @@ export default function MintNFTPage() {
                 exit={{ opacity: 0, x: -50 }}
                 transition={{ duration: 0.3 }}
               >
+                {/* Collection form remains the same */}
                 <Card className="bg-gray-800/50 border-gray-700">
                   <CardHeader>
                     <CardTitle className="text-white">Collection Details</CardTitle>
@@ -307,7 +379,7 @@ export default function MintNFTPage() {
                           max="100"
                           step="0.1"
                           placeholder="5"
-                          {...collectionForm.register("royaltyFee")}
+                          {...collectionForm.register("royaltyFee", { valueAsNumber: true })}
                           className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
                         />
                         <p className="text-xs text-gray-400">Enter percentage (e.g., 5 for 5%)</p>
@@ -359,7 +431,6 @@ export default function MintNFTPage() {
                             {collection.symbol}
                           </Badge>
                         </div>
-                    
                       </div>
                     </CardContent>
                   </Card>
@@ -369,7 +440,7 @@ export default function MintNFTPage() {
                   <CardHeader>
                     <CardTitle className="text-white">NFT Details</CardTitle>
                     <CardDescription className="text-gray-400">
-                      Create an individual NFT in your collection
+                      Create an individual NFT in your collection with IPFS storage
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -391,7 +462,8 @@ export default function MintNFTPage() {
                                   type="button"
                                   onClick={() => {
                                     setPreviewImage(null);
-                                    nftForm.setValue("image", "");
+                                    setSelectedFile(null);
+                                    nftForm.setValue("image", undefined);
                                   }}
                                   className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
                                 >
@@ -426,7 +498,7 @@ export default function MintNFTPage() {
                           </div>
                         </div>
                         {nftForm.formState.errors.image && (
-                          <p className="text-sm text-red-400">{nftForm.formState.errors.image.message}</p>
+                          <p className="text-sm text-red-400">{nftForm.formState.errors.image.message?.toString()}</p>
                         )}
                       </div>
 
@@ -461,14 +533,63 @@ export default function MintNFTPage() {
                         )}
                       </div>
 
+                      {/* IPFS Upload Status */}
+                      {uploadedMetadata && (
+                        <div className="bg-green-900/30 border border-green-600 rounded-lg p-4">
+                          <h4 className="text-green-400 font-medium mb-2 flex items-center">
+                            <Check className="h-4 w-4 mr-2" />
+                            Successfully uploaded to IPFS
+                          </h4>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-300">Image CID:</span>
+                              <div className="flex items-center space-x-2">
+                                <code className="text-green-400 text-xs">{uploadedMetadata.imageCid}</code>
+                                {uploadedMetadata.imageUrl && (
+                                  <a
+                                    href={uploadedMetadata.imageUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-purple-400 hover:text-purple-300"
+                                  >
+                                    <LinkIcon className="h-3 w-3" />
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-300">Metadata CID:</span>
+                              <div className="flex items-center space-x-2">
+                                <code className="text-green-400 text-xs">{uploadedMetadata.metadataCid}</code>
+                                {uploadedMetadata.metadataUrl && (
+                                  <a
+                                    href={uploadedMetadata.metadataUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-purple-400 hover:text-purple-300"
+                                  >
+                                    <LinkIcon className="h-3 w-3" />
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="pt-4">
                         <Button
                           type="submit"
                           className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500"
                           size="lg"
-                          disabled={mintNFT.isPending || isUploading}
+                          disabled={mintNFT.isPending || isUploading || !selectedFile}
                         >
-                          {mintNFT.isPending ? (
+                          {isUploading ? (
+                            <>
+                              <Upload className="mr-2 h-4 w-4 animate-pulse" />
+                              Uploading to IPFS...
+                            </>
+                          ) : mintNFT.isPending ? (
                             <>
                               <Sparkles className="mr-2 h-4 w-4 animate-pulse" />
                               Minting NFT...
@@ -476,7 +597,7 @@ export default function MintNFTPage() {
                           ) : (
                             <>
                               <Sparkles className="mr-2 h-4 w-4" />
-                              Mint NFT
+                              Upload & Mint NFT
                             </>
                           )}
                         </Button>
@@ -489,7 +610,7 @@ export default function MintNFTPage() {
           </AnimatePresence>
         </div>
 
-        {/* Success Modal - Only for NFT minting */}
+        {/* Success Modal - Enhanced with IPFS info */}
         <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
           <DialogContent className="sm:max-w-md bg-gray-800 border-gray-700">
             <DialogHeader>
@@ -504,11 +625,32 @@ export default function MintNFTPage() {
             </DialogHeader>
             <div className="space-y-4 py-4">
               <p className="text-sm text-gray-300 text-center">
-                Your NFT has been minted and is now on the blockchain.
+                Your NFT has been minted and is now on the blockchain with IPFS metadata.
               </p>
+              
+              {/* Transaction Hash */}
               <div className="bg-gray-700 p-3 rounded-md">
                 <p className="text-xs font-mono break-all text-gray-300">TX: {transactionHash}</p>
               </div>
+
+              {/* IPFS Information */}
+              {uploadedMetadata && (
+                <div className="bg-gray-700 p-3 rounded-md space-y-2">
+                  <div>
+                    <p className="text-xs text-gray-400">Image IPFS:</p>
+                    <p className="text-xs font-mono break-all text-green-400">
+                      {uploadedMetadata.imageCid}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400">Metadata IPFS:</p>
+                    <p className="text-xs font-mono break-all text-green-400">
+                      {uploadedMetadata.metadataCid}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-center space-x-4 pt-2">
                 <Button
                   variant="outline"
