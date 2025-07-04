@@ -14,9 +14,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Check, ImageIcon, Sparkles, Upload, X } from "lucide-react";
 import { SubmitHandler, useForm } from "react-hook-form";
 import toast from "react-hot-toast";
-import { useWriteContract } from "wagmi";
+import { useChainId, useWriteContract } from "wagmi";
 import { z } from "zod/v4";
-import { useScaffoldContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useScaffoldContract, useScaffoldWriteContract, useSelectedNetwork, useTargetNetwork } from "~~/hooks/scaffold-eth";
+import { writeContract } from "wagmi/actions";
+import deployedContracts from "~~/contracts/deployedContracts";
+import { wagmiConfig } from "~~/services/web3/wagmiConfig";
 
 // Confetti component
 const Confetti = ({ isActive }: { isActive: boolean }) => {
@@ -73,17 +76,6 @@ const nftSchema = z.object({
 type CollectionFormData = z.infer<typeof collectionSchema>;
 type NFTFormData = z.infer<typeof nftSchema>;
 
-// // Mock API functions
-// const mockCreateCollection = async (data: CollectionFormData) => {
-//   await new Promise(resolve => setTimeout(resolve, 2000));
-//   return {
-//     id: Math.random().toString(36).substr(2, 9),
-//     transactionHash: "0x" + Math.random().toString(16).substr(2, 64),
-//     ...data,
-//     royaltyFeeBasisPoints: data.royaltyFee * 100, // Convert percentage to basis points
-//   };
-// };
-
 const mockMintNFT = async (data: NFTFormData & { collectionId: string }) => {
   await new Promise(resolve => setTimeout(resolve, 2000));
   return {
@@ -97,13 +89,13 @@ export default function MintNFTPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [collection, setCollection] = useState<any>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [successType, setSuccessType] = useState<"collection" | "nft">("collection");
   const [transactionHash, setTransactionHash] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const { writeContractAsync: writeMintIntelligentFactory } = useScaffoldWriteContract({
-    contractName: "MintIntelligentFactory",
+    contractName: "MintIntelligentFactory"
   });
+  
   // Collection form
   const collectionForm = useForm<CollectionFormData>({
     resolver: zodResolver(collectionSchema),
@@ -123,18 +115,27 @@ export default function MintNFTPage() {
       description: "",
       image: "",
     },
-  });
+  })
+  const {targetNetwork} = useTargetNetwork()
 
   const createCollection = useMutation({
     mutationFn: async (data: CollectionFormData) => {
-      const hash = await writeMintIntelligentFactory({
+      console.log({data})
+      const abi = deployedContracts[targetNetwork.id as keyof typeof deployedContracts].MintIntelligentFactory.abi
+      const address = deployedContracts[targetNetwork.id as keyof typeof deployedContracts].MintIntelligentFactory.address
+
+      const hash = await writeContract(wagmiConfig,{
         args: [data.name, data.symbol, data.royaltyReceiver, BigInt(data.royaltyFee * 100)],
         functionName: "createNFTContract",
+        abi,
+        address
       });
+      console.log({hash})
       if (!hash) {
         throw new Error("Failed to create collection");
       }
       return {
+
         transactionHash: hash,
         ...data,
       };
@@ -142,8 +143,10 @@ export default function MintNFTPage() {
     onSuccess: data => {
       setCollection(data);
       setTransactionHash(data.transactionHash);
-      // setSuccessType("collection");
-      // setShowSuccessModal(true);
+      // Show success toast instead of modal
+      toast.success("Collection created successfully! Now you can mint NFTs.");
+      // Automatically proceed to step 2
+      setCurrentStep(2);
     },
     onError: error => {
       toast.error(error.message);
@@ -154,7 +157,6 @@ export default function MintNFTPage() {
     mutationFn: mockMintNFT,
     onSuccess: data => {
       setTransactionHash(data.transactionHash);
-      setSuccessType("nft");
       setShowSuccessModal(true);
       nftForm.reset();
       setPreviewImage(null);
@@ -184,13 +186,6 @@ export default function MintNFTPage() {
       console.error("Error uploading image:", error);
     } finally {
       setIsUploading(false);
-    }
-  };
-
-  const handleSuccessModalClose = () => {
-    setShowSuccessModal(false);
-    if (successType === "collection") {
-      setCurrentStep(2);
     }
   };
 
@@ -364,15 +359,7 @@ export default function MintNFTPage() {
                             {collection.symbol}
                           </Badge>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setCurrentStep(1)}
-                          className="text-gray-400 hover:text-white"
-                        >
-                          <ArrowLeft className="mr-2 h-4 w-4" />
-                          Edit Collection
-                        </Button>
+                    
                       </div>
                     </CardContent>
                   </Card>
@@ -502,7 +489,7 @@ export default function MintNFTPage() {
           </AnimatePresence>
         </div>
 
-        {/* Success Modal */}
+        {/* Success Modal - Only for NFT minting */}
         <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
           <DialogContent className="sm:max-w-md bg-gray-800 border-gray-700">
             <DialogHeader>
@@ -512,45 +499,32 @@ export default function MintNFTPage() {
                     <Check className="h-6 w-6 text-green-600" />
                   </div>
                 </div>
-                {successType === "collection" ? "Collection Created!" : "NFT Minted Successfully!"}
+                NFT Minted Successfully!
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <p className="text-sm text-gray-300 text-center">
-                {successType === "collection"
-                  ? "Your collection has been created successfully. Now you can mint NFTs!"
-                  : "Your NFT has been minted and is now on the blockchain."}
+                Your NFT has been minted and is now on the blockchain.
               </p>
               <div className="bg-gray-700 p-3 rounded-md">
                 <p className="text-xs font-mono break-all text-gray-300">TX: {transactionHash}</p>
               </div>
               <div className="flex justify-center space-x-4 pt-2">
-                {successType === "collection" ? (
-                  <Button
-                    onClick={handleSuccessModalClose}
-                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500"
-                  >
-                    Continue to Mint NFTs
-                  </Button>
-                ) : (
-                  <>
-                    <Button
-                      variant="outline"
-                      onClick={handleMintAnother}
-                      className="w-full border-gray-600 text-gray-300 hover:bg-gray-700"
-                    >
-                      Mint Another NFT
-                    </Button>
-                    <Button
-                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500"
-                      asChild
-                    >
-                      <a href="/me" className="no-underline">
-                        View My NFTs
-                      </a>
-                    </Button>
-                  </>
-                )}
+                <Button
+                  variant="outline"
+                  onClick={handleMintAnother}
+                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700"
+                >
+                  Mint Another NFT
+                </Button>
+                <Button
+                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500"
+                  asChild
+                >
+                  <a href="/me" className="no-underline">
+                    View My NFTs
+                  </a>
+                </Button>
               </div>
             </div>
           </DialogContent>
