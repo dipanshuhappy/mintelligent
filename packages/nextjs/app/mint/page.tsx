@@ -9,11 +9,25 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, Copy, ImageIcon, Link as LinkIcon, Sparkles, Upload, X } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Bot,
+  Check,
+  Copy,
+  ImageIcon,
+  Link as LinkIcon,
+  Minus,
+  Plus,
+  Sparkles,
+  Upload,
+  X,
+} from "lucide-react";
 import { SubmitHandler, useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import { parseEventLogs } from "viem";
@@ -67,6 +81,13 @@ const Confetti = ({ isActive }: { isActive: boolean }) => {
   );
 };
 
+// Attribute type
+interface Attribute {
+  trait_type: string;
+  value: string | number;
+  display_type: "string" | "number" | "date";
+}
+
 // Collection validation schema
 const collectionSchema = z.object({
   name: z.string().min(1, "Collection name is required").max(50, "Name must be less than 50 characters"),
@@ -75,17 +96,17 @@ const collectionSchema = z.object({
   royaltyFee: z.number().min(0, "Royalty fee must be at least 0%").max(50, "Royalty fee cannot exceed 50%"),
 });
 
-// Updated NFT validation schema
-const nftSchema = z.object({
-  name: z.string().min(1, "NFT name is required").max(100, "Name must be less than 100 characters"),
+// Updated AI Agent validation schema
+const agentSchema = z.object({
+  name: z.string().min(1, "AI Agent name is required").max(100, "Name must be less than 100 characters"),
   description: z.string().min(1, "Description is required").max(1000, "Description must be less than 1000 characters"),
   image: z.any().refine(file => file instanceof File, "Image file is required"),
 });
 
 type CollectionFormData = z.infer<typeof collectionSchema>;
-type NFTFormData = z.infer<typeof nftSchema>;
+type AgentFormData = z.infer<typeof agentSchema>;
 
-export default function MintNFTPage() {
+export default function DeployAIAgentPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [contractAddress, setContractAddress] = useState("");
   const [collection, setCollection] = useState<any>(null);
@@ -102,6 +123,9 @@ export default function MintNFTPage() {
     metadataUrl?: string;
   } | null>(null);
 
+  // Attributes state
+  const [attributes, setAttributes] = useState<Attribute[]>([{ trait_type: "", value: "", display_type: "string" }]);
+
   const { writeContractAsync: writeMintIntelligentFactory } = useScaffoldWriteContract({
     contractName: "MintIntelligentFactory",
   });
@@ -117,9 +141,9 @@ export default function MintNFTPage() {
     },
   });
 
-  // NFT form with file handling
-  const nftForm = useForm<NFTFormData>({
-    resolver: zodResolver(nftSchema),
+  // AI Agent form with file handling
+  const agentForm = useForm<AgentFormData>({
+    resolver: zodResolver(agentSchema),
     defaultValues: {
       name: "",
       description: "",
@@ -128,6 +152,27 @@ export default function MintNFTPage() {
   });
 
   const { targetNetwork } = useTargetNetwork();
+
+  // Attribute management functions
+  const addAttribute = () => {
+    setAttributes([...attributes, { trait_type: "", value: "", display_type: "string" }]);
+  };
+
+  const removeAttribute = (index: number) => {
+    if (attributes.length > 1) {
+      setAttributes(attributes.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateAttribute = (index: number, field: keyof Attribute, value: string | number) => {
+    const updatedAttributes = [...attributes];
+    if (field === "value" && updatedAttributes[index].display_type === "number") {
+      updatedAttributes[index][field] = Number(value) || 0;
+    } else {
+      updatedAttributes[index][field] = value as any;
+    }
+    setAttributes(updatedAttributes);
+  };
 
   const createCollection = useMutation({
     mutationFn: async (data: CollectionFormData) => {
@@ -180,7 +225,7 @@ export default function MintNFTPage() {
     onSuccess: data => {
       setCollection(data);
       setTransactionHash(data.transactionHash);
-      toast.success("Collection created successfully! Now you can mint NFTs.");
+      toast.success("AI Agent collection created successfully! Now you can deploy agents.");
       setCurrentStep(2);
     },
     onError: error => {
@@ -189,7 +234,7 @@ export default function MintNFTPage() {
     },
   });
 
-  const mintNFT = useMutation({
+  const deployAgent = useMutation({
     mutationFn: async (data: { tokenURI: string }) => {
       try {
         const abi = deployedContracts[targetNetwork.id as keyof typeof deployedContracts].MintIntelligentFactory.abi;
@@ -240,7 +285,7 @@ export default function MintNFTPage() {
           ...data,
         };
       } catch (error) {
-        console.error("NFT minting error:", error);
+        console.error("AI Agent deployment error:", error);
         throw error;
       }
     },
@@ -248,14 +293,14 @@ export default function MintNFTPage() {
       setTransactionHash(data.transactionHash);
       setTokenId(data.tokenId);
       setShowSuccessModal(true);
-      nftForm.reset();
+      agentForm.reset();
       setPreviewImage(null);
       setSelectedFile(null);
-      // Don't reset uploadedMetadata here so it shows in modal
+      setAttributes([{ trait_type: "", value: "", display_type: "string" }]);
     },
     onError: error => {
-      console.error("NFT minting failed:", error);
-      toast.error(error?.message || "Failed to mint NFT");
+      console.error("AI Agent deployment failed:", error);
+      toast.error(error?.message || "Failed to deploy AI Agent");
     },
   });
 
@@ -263,11 +308,14 @@ export default function MintNFTPage() {
     createCollection.mutate(data);
   };
 
-  const onNFTSubmit: SubmitHandler<NFTFormData> = async data => {
+  const onAgentSubmit: SubmitHandler<AgentFormData> = async data => {
     if (!selectedFile) {
       toast.error("Please select an image file");
       return;
     }
+
+    // Validate attributes
+    const validAttributes = attributes.filter(attr => attr.trait_type.trim() && attr.value.toString().trim());
 
     setIsUploading(true);
 
@@ -277,6 +325,7 @@ export default function MintNFTPage() {
       formData.append("image", selectedFile);
       formData.append("name", data.name);
       formData.append("description", data.description);
+      formData.append("attributes", JSON.stringify(validAttributes));
 
       // Upload to Filebase/IPFS
       const uploadResult = await uploadNFTAction(formData);
@@ -293,11 +342,11 @@ export default function MintNFTPage() {
         metadataUrl: uploadResult.metadataUrl,
       });
 
-      toast.success("Metadata uploaded to IPFS successfully!");
+      toast.success("AI Agent metadata uploaded to IPFS successfully!");
 
-      // Use the metadata URL as tokenURI for minting
+      // Use the metadata URL as tokenURI for deployment
       if (uploadResult.metadataUrl) {
-        await mintNFT.mutateAsync({ tokenURI: uploadResult.metadataUrl });
+        await deployAgent.mutateAsync({ tokenURI: uploadResult.metadataUrl });
       } else {
         throw new Error("No metadata URL received from upload");
       }
@@ -332,15 +381,15 @@ export default function MintNFTPage() {
       setSelectedFile(file);
 
       // Update form value
-      nftForm.setValue("image", file);
-      nftForm.clearErrors("image");
+      agentForm.setValue("image", file);
+      agentForm.clearErrors("image");
     } catch (error) {
       console.error("Error handling image:", error);
       toast.error("Error processing image file");
     }
   };
 
-  const handleMintAnother = () => {
+  const handleDeployAnother = () => {
     setShowSuccessModal(false);
     setUploadedMetadata(null);
   };
@@ -361,13 +410,17 @@ export default function MintNFTPage() {
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="text-center mb-8">
+            <div className="flex justify-center items-center gap-2 mb-4">
+              <Bot className="h-8 w-8 text-purple-400" />
+              <Sparkles className="h-6 w-6 text-pink-400" />
+            </div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-4">
-              {currentStep === 1 ? "Create Collection" : "Mint NFT"}
+              {currentStep === 1 ? "Create AI Agent Collection" : "Deploy AI Agent"}
             </h1>
             <p className="text-gray-300">
               {currentStep === 1
-                ? "First, create your NFT collection with royalty settings"
-                : "Now mint individual NFTs to your collection with IPFS storage"}
+                ? "First, create your AI Agent collection with royalty settings"
+                : "Now deploy individual AI Agents to your collection with IPFS storage"}
             </p>
           </div>
 
@@ -404,9 +457,9 @@ export default function MintNFTPage() {
                 {/* Collection form */}
                 <Card className="bg-gray-800/50 border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">Collection Details</CardTitle>
+                    <CardTitle className="text-white">AI Agent Collection Details</CardTitle>
                     <CardDescription className="text-gray-400">
-                      Set up your NFT collection with royalty settings
+                      Set up your AI Agent collection with royalty settings
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -417,7 +470,7 @@ export default function MintNFTPage() {
                         </Label>
                         <Input
                           id="collectionName"
-                          placeholder="My Awesome Collection"
+                          placeholder="My AI Agent Fleet"
                           {...collectionForm.register("name")}
                           className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
                         />
@@ -432,7 +485,7 @@ export default function MintNFTPage() {
                         </Label>
                         <Input
                           id="collectionSymbol"
-                          placeholder="AWESOME"
+                          placeholder="AIAGENT"
                           {...collectionForm.register("symbol")}
                           className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
                         />
@@ -492,7 +545,7 @@ export default function MintNFTPage() {
                             </>
                           ) : (
                             <>
-                              Create Collection
+                              Create AI Agent Collection
                               <ArrowRight className="ml-2 h-4 w-4" />
                             </>
                           )}
@@ -539,16 +592,16 @@ export default function MintNFTPage() {
 
                 <Card className="bg-gray-800/50 border-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-white">NFT Details</CardTitle>
+                    <CardTitle className="text-white">AI Agent Details</CardTitle>
                     <CardDescription className="text-gray-400">
-                      Create an individual NFT in your collection with IPFS storage
+                      Deploy an individual AI Agent in your collection with IPFS storage
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <form onSubmit={nftForm.handleSubmit(onNFTSubmit)} className="space-y-6">
+                    <form onSubmit={agentForm.handleSubmit(onAgentSubmit)} className="space-y-6">
                       <div className="space-y-2">
                         <Label htmlFor="image" className="text-gray-200">
-                          NFT Image
+                          AI Agent Avatar
                         </Label>
                         <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed border-gray-600 rounded-lg">
                           <div className="space-y-1 text-center">
@@ -564,7 +617,7 @@ export default function MintNFTPage() {
                                   onClick={() => {
                                     setPreviewImage(null);
                                     setSelectedFile(null);
-                                    nftForm.setValue("image", undefined);
+                                    agentForm.setValue("image", undefined);
                                   }}
                                   className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
                                 >
@@ -580,7 +633,7 @@ export default function MintNFTPage() {
                                   >
                                     <div className="flex flex-col items-center justify-center space-y-2">
                                       <Upload className="h-12 w-12 text-gray-400" />
-                                      <span>Upload a file</span>
+                                      <span>Upload AI Agent Avatar</span>
                                       <span className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</span>
                                     </div>
                                     <input
@@ -598,27 +651,27 @@ export default function MintNFTPage() {
                             )}
                           </div>
                         </div>
-                        {nftForm.formState.errors.image && (
+                        {agentForm.formState.errors.image && (
                           <p className="text-sm text-red-400">
-                            {typeof nftForm.formState.errors.image.message === "string"
-                              ? nftForm.formState.errors.image.message
-                              : "Image is required"}
+                            {typeof agentForm.formState.errors.image.message === "string"
+                              ? agentForm.formState.errors.image.message
+                              : "Avatar image is required"}
                           </p>
                         )}
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="nftName" className="text-gray-200">
-                          NFT Name
+                        <Label htmlFor="agentName" className="text-gray-200">
+                          AI Agent Name
                         </Label>
                         <Input
-                          id="nftName"
-                          placeholder="My Awesome NFT #1"
-                          {...nftForm.register("name")}
+                          id="agentName"
+                          placeholder="My AI Assistant #1"
+                          {...agentForm.register("name")}
                           className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
                         />
-                        {nftForm.formState.errors.name && (
-                          <p className="text-sm text-red-400">{nftForm.formState.errors.name.message}</p>
+                        {agentForm.formState.errors.name && (
+                          <p className="text-sm text-red-400">{agentForm.formState.errors.name.message}</p>
                         )}
                       </div>
 
@@ -628,14 +681,88 @@ export default function MintNFTPage() {
                         </Label>
                         <Textarea
                           id="description"
-                          placeholder="A brief description of your NFT"
+                          placeholder="Describe your AI Agent's capabilities and personality"
                           rows={3}
-                          {...nftForm.register("description")}
+                          {...agentForm.register("description")}
                           className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
                         />
-                        {nftForm.formState.errors.description && (
-                          <p className="text-sm text-red-400">{nftForm.formState.errors.description.message}</p>
+                        {agentForm.formState.errors.description && (
+                          <p className="text-sm text-red-400">{agentForm.formState.errors.description.message}</p>
                         )}
+                      </div>
+
+                      {/* Attributes Section */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-gray-200">AI Agent Attributes</Label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={addAttribute}
+                            className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Attribute
+                          </Button>
+                        </div>
+
+                        <div className="space-y-3">
+                          {attributes.map((attribute, index) => (
+                            <div key={index} className="flex gap-2 items-end">
+                              <div className="flex-1">
+                                <Label className="text-xs text-gray-400">Trait Type</Label>
+                                <Input
+                                  placeholder="e.g., Personality, Level, Base"
+                                  value={attribute.trait_type}
+                                  onChange={e => updateAttribute(index, "trait_type", e.target.value)}
+                                  className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <Label className="text-xs text-gray-400">Value</Label>
+                                <Input
+                                  placeholder="e.g., Helpful, 5, Advanced"
+                                  value={attribute.value}
+                                  type={attribute.display_type === "number" ? "number" : "text"}
+                                  onChange={e => updateAttribute(index, "value", e.target.value)}
+                                  className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                                />
+                              </div>
+                              <div className="w-24">
+                                <Label className="text-xs text-gray-400">Type</Label>
+                                <Select
+                                  value={attribute.display_type}
+                                  onValueChange={(value: "string" | "number" | "date") =>
+                                    updateAttribute(index, "display_type", value)
+                                  }
+                                >
+                                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-gray-700 border-gray-600">
+                                    <SelectItem value="string">Text</SelectItem>
+                                    <SelectItem value="number">Number</SelectItem>
+                                    <SelectItem value="date">Date</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => removeAttribute(index)}
+                                disabled={attributes.length === 1}
+                                className="border-gray-600 text-gray-300 hover:bg-gray-700 px-2"
+                              >
+                                <Minus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-400">
+                          Attributes help define your AI Agent's characteristics and capabilities
+                        </p>
                       </div>
 
                       {/* IPFS Upload Status */}
@@ -687,22 +814,22 @@ export default function MintNFTPage() {
                           type="submit"
                           className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500"
                           size="lg"
-                          disabled={mintNFT.isPending || isUploading || !selectedFile}
+                          disabled={deployAgent.isPending || isUploading || !selectedFile}
                         >
                           {isUploading ? (
                             <>
                               <Upload className="mr-2 h-4 w-4 animate-pulse" />
                               Uploading to IPFS...
                             </>
-                          ) : mintNFT.isPending ? (
+                          ) : deployAgent.isPending ? (
                             <>
-                              <Sparkles className="mr-2 h-4 w-4 animate-pulse" />
-                              Minting NFT...
+                              <Bot className="mr-2 h-4 w-4 animate-pulse" />
+                              Deploying AI Agent...
                             </>
                           ) : (
                             <>
                               <Sparkles className="mr-2 h-4 w-4" />
-                              Upload & Mint NFT
+                              Upload & Deploy AI Agent
                             </>
                           )}
                         </Button>
@@ -715,22 +842,22 @@ export default function MintNFTPage() {
           </AnimatePresence>
         </div>
 
-        {/* Success Modal - Enhanced with IPFS info */}
+        {/* Success Modal */}
         <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
           <DialogContent className="sm:max-w-md bg-gray-800 border-gray-700">
             <DialogHeader>
               <DialogTitle className="text-center text-white">
                 <div className="flex justify-center mb-4">
                   <div className="rounded-full bg-green-100 p-3">
-                    <Check className="h-6 w-6 text-green-600" />
+                    <Bot className="h-6 w-6 text-green-600" />
                   </div>
                 </div>
-                NFT Minted Successfully!
+                AI Agent Deployed Successfully!
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <p className="text-sm text-gray-300 text-center">
-                Your NFT has been minted and is now on the blockchain with IPFS metadata.
+                Your AI Agent has been deployed and is now on the blockchain with IPFS metadata.
               </p>
 
               {/* Transaction Hash */}
@@ -744,14 +871,14 @@ export default function MintNFTPage() {
                     <Copy className="h-3 w-3" />
                   </button>
                 </div>
-                {tokenId && <p className="text-xs text-gray-300 mt-2">Token ID: {tokenId}</p>}
+                {tokenId && <p className="text-xs text-gray-300 mt-2">Agent ID: {tokenId}</p>}
               </div>
 
               {/* IPFS Information */}
               {uploadedMetadata && (
                 <div className="bg-gray-700 p-3 rounded-md space-y-2">
                   <div>
-                    <p className="text-xs text-gray-400">Image IPFS:</p>
+                    <p className="text-xs text-gray-400">Avatar IPFS:</p>
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-mono break-all text-green-400 mr-2">{uploadedMetadata.imageCid}</p>
                       <div className="flex space-x-1">
@@ -804,17 +931,17 @@ export default function MintNFTPage() {
               <div className="flex flex-col-reverse gap-3 justify-center space-x-4 pt-2">
                 <Button
                   variant="outline"
-                  onClick={handleMintAnother}
+                  onClick={handleDeployAnother}
                   className="w-full border-gray-600 text-gray-300 hover:bg-gray-700"
                 >
-                  Mint Another NFT
+                  Deploy Another Agent
                 </Button>
                 <Button
                   className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500"
                   asChild
                 >
                   <Link href="/me" className="no-underline">
-                    View My NFTs
+                    View My AI Agents
                   </Link>
                 </Button>
               </div>
