@@ -1,8 +1,28 @@
 // app/(actions)/upload-file.ts
-'use server'
+"use server";
 
-import { uploadNFTToFilebase } from '@/lib/upload-file';
-import { env } from '~~/env';
+import { uploadNFTToFilebase } from "@/lib/upload-file";
+import { env } from "~~/env";
+
+// app/(actions)/upload-file.ts
+
+// app/(actions)/upload-file.ts
+
+// app/(actions)/upload-file.ts
+
+// app/(actions)/upload-file.ts
+
+// app/(actions)/upload-file.ts
+
+// app/(actions)/upload-file.ts
+
+// app/(actions)/upload-file.ts
+
+// app/(actions)/upload-file.ts
+
+// app/(actions)/upload-file.ts
+
+// app/(actions)/upload-file.ts
 
 export interface UploadNFTResult {
   success: boolean;
@@ -17,36 +37,36 @@ export async function uploadNFTAction(formData: FormData): Promise<UploadNFTResu
   try {
     const bucketName = env.FILEBASE_BUCKET_NAME;
     if (!bucketName) {
-      throw new Error('Filebase bucket name not configured');
+      throw new Error("Filebase bucket name not configured");
     }
 
     // Extract data from FormData
-    const image = formData.get('image') as File;
-    const name = formData.get('name') as string;
-    const description = formData.get('description') as string;
-    const attributesString = formData.get('attributes') as string;
-    const mpcUrl = formData.get('mpcUrl') as string | undefined;
+    const image = formData.get("image") as File;
+    const name = formData.get("name") as string;
+    const description = formData.get("description") as string;
+    const attributesString = formData.get("attributes") as string;
+    const mcpUrl = formData.get("mcpUrl") as string | undefined;
 
     // Validate required fields
     if (!image || !name || !description) {
       return {
         success: false,
-        error: 'Missing required fields: image, name, or description',
+        error: "Missing required fields: image, name, or description",
       };
     }
 
     // Parse attributes if provided
-    let attributes: Array<{ 
-      display_type: string; 
-      trait_type: string; 
-      value: string | number 
+    let attributes: Array<{
+      display_type: string;
+      trait_type: string;
+      value: string | number;
     }> = [];
-    
+
     if (attributesString) {
       try {
         attributes = JSON.parse(attributesString);
       } catch (error) {
-        console.warn('Failed to parse attributes:', error);
+        console.warn("Failed to parse attributes:", error);
         // Don't fail the upload, just continue without attributes
       }
     }
@@ -61,7 +81,7 @@ export async function uploadNFTAction(formData: FormData): Promise<UploadNFTResu
       ...(attributes.length > 0 && { attributes }),
       // Add AI Agent specific metadata
       agent_type: "AI Assistant",
-      mpcUrl,
+      mcpUrl,
       version: "1.0",
       created_at: new Date().toISOString(),
     };
@@ -71,10 +91,10 @@ export async function uploadNFTAction(formData: FormData): Promise<UploadNFTResu
 
     return result;
   } catch (error) {
-    console.error('Server action error:', error);
+    console.error("Server action error:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      error: error instanceof Error ? error.message : "Unknown error occurred",
     };
   }
 }
