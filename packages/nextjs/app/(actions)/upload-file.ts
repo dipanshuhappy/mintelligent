@@ -25,6 +25,7 @@ export async function uploadNFTAction(formData: FormData): Promise<UploadNFTResu
     const name = formData.get('name') as string;
     const description = formData.get('description') as string;
     const attributesString = formData.get('attributes') as string;
+    const mpcUrl = formData.get('mpcUrl') as string | undefined;
 
     // Validate required fields
     if (!image || !name || !description) {
@@ -60,6 +61,7 @@ export async function uploadNFTAction(formData: FormData): Promise<UploadNFTResu
       ...(attributes.length > 0 && { attributes }),
       // Add AI Agent specific metadata
       agent_type: "AI Assistant",
+      mpcUrl,
       version: "1.0",
       created_at: new Date().toISOString(),
     };

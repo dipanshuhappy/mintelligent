@@ -9,7 +9,7 @@ import { Bot, BrainCircuit, Cpu, Sparkles } from "lucide-react";
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-background flex items-center justify-center p-6 relative overflow-hidden">
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden opacity-20">
         <div className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] bg-[url('/grid.svg')] animate-pulse"></div>
@@ -51,15 +51,15 @@ export default function HomePage() {
             <motion.div
               animate={{ rotate: 360 }}
               transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-              className="p-2 rounded-full border-2 border-cyan-400/30"
+              className="p-2 rounded-full border-2 border-primary/30"
             >
-              <Cpu className="h-10 w-10 text-cyan-400" />
+              <Cpu className="h-10 w-10 text-primary" />
             </motion.div>
           </div>
-          <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent mb-6">
+          <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent mb-6">
             AI Agent Nexus
           </h1>
-          <p className="text-xl md:text-2xl text-gray-300 max-w-2xl mx-auto">
+          <p className="text-xl md:text-2xl text-foreground/80 max-w-2xl mx-auto">
             Empower your digital experience with our next-generation AI agents
           </p>
 
@@ -70,7 +70,7 @@ export default function HomePage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 + i * 0.1 }}
-                className="px-4 py-2 bg-cyan-500/10 text-cyan-300 rounded-full text-sm font-medium border border-cyan-400/20"
+                className="px-4 py-2 bg-primary/10 text-primary-foreground/80 rounded-full text-sm font-medium border border-primary/20"
               >
                 {tag}
               </motion.span>
@@ -88,7 +88,7 @@ export default function HomePage() {
             className="w-full md:w-auto"
           >
             <Link href="/mint">
-              <Button className="w-full md:w-72 h-20 text-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl shadow-2xl shadow-cyan-500/20 transition-all duration-300 flex items-center justify-center gap-3 px-8 border border-cyan-400/30 group">
+              <Button className="w-full md:w-72 h-20 text-xl bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-primary-foreground rounded-xl shadow-2xl shadow-primary/20 transition-all duration-300 flex items-center justify-center gap-3 px-8 border border-primary/30 group">
                 <BrainCircuit className="h-6 w-6 group-hover:scale-110 transition-transform" />
                 Deploy Agent
               </Button>
