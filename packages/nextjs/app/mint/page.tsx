@@ -100,9 +100,8 @@ const collectionSchema = z.object({
 const agentSchema = z.object({
   name: z.string().min(1, "AI Agent name is required").max(100, "Name must be less than 100 characters"),
   description: z.string().min(1, "Description is required").max(1000, "Description must be less than 1000 characters"),
-  mpcUrl: z.string().optional(),
+  mcpUrl: z.string().optional(),
   image: z.any().refine(file => file instanceof File, "Image file is required"),
-
 });
 
 type CollectionFormData = z.infer<typeof collectionSchema>;
@@ -329,8 +328,8 @@ export default function DeployAIAgentPage() {
       formData.append("name", data.name);
       formData.append("description", data.description);
       formData.append("attributes", JSON.stringify(validAttributes));
-      if (data.mpcUrl) {
-        formData.append("mpcUrl", data.mpcUrl);
+      if (data.mcpUrl) {
+        formData.append("mcpUrl", data.mcpUrl);
       }
 
       // Upload to Filebase/IPFS
@@ -697,18 +696,18 @@ export default function DeployAIAgentPage() {
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="mpcUrl" className="text-gray-200">
+                        <Label htmlFor="mcpUrl" className="text-gray-200">
                           MCP URL
                         </Label>
                         <Textarea
-                          id="mpcUrl"
-                          placeholder="Add your AI agent MPC URL"
+                          id="mcpUrl"
+                          placeholder="Add your AI agent MCP URL"
                           rows={3}
-                          {...agentForm.register("mpcUrl")}
+                          {...agentForm.register("mcpUrl")}
                           className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
                         />
-                        {agentForm.formState.errors.mpcUrl && (
-                          <p className="text-sm text-red-400">{agentForm.formState.errors.mpcUrl.message}</p>
+                        {agentForm.formState.errors.mcpUrl && (
+                          <p className="text-sm text-red-400">{agentForm.formState.errors.mcpUrl.message}</p>
                         )}
                       </div>
 
